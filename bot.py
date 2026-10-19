@@ -51,6 +51,7 @@ from downloader import (
     format_filesize
 )
 from gemini_recap import get_gemini_api_key
+from auth_gate import check_user_purchased_status, send_vip_gate_required_message
 
 # Load environment variables
 load_dotenv()
@@ -761,11 +762,21 @@ async def send_or_reply(
     )
 
 
-def _make_welcome_text() -> str:
+def _make_welcome_text(user_id: Optional[int] = None) -> str:
     mode_badge = "⚡ <b>Local API Mode:</b> 2000MB (2GB) အပြည့်အဝ အသုံးပြုနိုင်ပါသည် 🔥\n\n" if IS_LOCAL_BOT_API else ""
+    vip_badge = ""
+    if user_id:
+        try:
+            if check_user_purchased_status(user_id):
+                vip_badge = "👑 <b>VIP Account:</b> <i>အတည်ပြုပြီး (Active VIP)</i> ✅\n\n"
+            else:
+                vip_badge = "👑 <b>VIP Status:</b> <i>Voice Clone Pro ဝယ်ယူသူများ သီးသန့် အသုံးပြုနိုင်ပါသည်</i> 🔒\n\n"
+        except Exception:
+            pass
     return (
         "🎬 <b>AI Myanmar Recap Studio Pro</b> 🇲🇲\n"
         "<i>Professional Video Dubbing & Movie Recap Creator</i>\n\n"
+        f"{vip_badge}"
         f"{mode_badge}"
         "English ဗီဒီယိုနှင့် ရုပ်ရှင်ကားများကို <b>မြန်မာဘာသာစကားပြော AI Recap Video</b> အဖြစ် Voice Clone သဘာဝအသံ၊ အချိန်ကိုက် မြန်မာစာတန်းထိုး၊ မူရင်းစာတန်းဖျက် (Blur) နှင့် Channel Logo များဖြင့် 1-Click အပြီးသတ် ဖန်တီးပေးနိုင်ပါသည်။\n\n"
         "🚀 <b>စတင်အသုံးပြုရန်:</b>\n"
@@ -784,10 +795,11 @@ def _make_welcome_markup() -> InlineKeyboardMarkup:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
+    user_id = update.effective_user.id if update.effective_user else None
     await send_or_reply(
         update,
         context,
-        _make_welcome_text(),
+        _make_welcome_text(user_id),
         reply_markup=_make_welcome_markup(),
         parse_mode=constants.ParseMode.HTML
     )
@@ -820,6 +832,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming text messages and extract URLs."""
     if not update.message or not update.message.text:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if user_id and not check_user_purchased_status(user_id):
+        await send_vip_gate_required_message(update)
         return
 
     text = update.message.text.strip()
@@ -1054,6 +1071,11 @@ async def handle_media_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Handle incoming video/audio/document uploads."""
     message = update.message
     if not message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if user_id and not check_user_purchased_status(user_id):
+        await send_vip_gate_required_message(update)
         return
 
     media = None
@@ -1337,6 +1359,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     action, session_id = parts[0], parts[1]
 
+    # VIP GATE ACTIONS
+    if action == "gate":
+        if session_id == "recheck":
+            user_id = update.effective_user.id if update.effective_user else None
+            is_vip = check_user_purchased_status(user_id) if user_id else False
+            if is_vip:
+                try:
+                    await query.answer("🎉 ဂုဏ်ယူပါသည်! သင်သည် VIP ဝယ်ယူထားသူဖြစ်၍ အသုံးပြုခွင့် ရရှိပါပြီခင်ဗျာ။", show_alert=True)
+                except Exception:
+                    pass
+                await query.edit_message_text(
+                    "✅ <b>VIP အတည်ပြုခြင်း အောင်မြင်ပါပြီခင်ဗျာ!</b>\n\nYouTube သို့မဟုတ် TikTok Link ပေးပို့၍ AI Recap နှင့် Video ဒေါင်းလုဒ်များကို စတင် အသုံးပြုနိုင်ပါပြီ။",
+                    parse_mode=constants.ParseMode.HTML
+                )
+            else:
+                try:
+                    await query.answer("❌ VIP ဝယ်ယူထားခြင်း မရှိသေးပါခင်ဗျာ။ Voice Clone Pro Official Bot တွင် အရင်ဆုံး ဝယ်ယူပေးပါရန် မေတ္တာရပ်ခံအပ်ပါသည်။", show_alert=True)
+                except Exception:
+                    pass
+        return
+
+    # Check VIP gate for all operational actions (downloads, recap generation)
+    user_id = update.effective_user.id if update.effective_user else None
+    if action != "menu" and user_id and not check_user_purchased_status(user_id):
+        await send_vip_gate_required_message(update)
+        return
+
     # TOP-LEVEL MENU ACTIONS (HELP, VOICES, WELCOME)
     if action == "menu":
         if session_id == "help":
@@ -1385,7 +1434,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_edit_menu(query, voice_text, voice_kb)
             return
         elif session_id == "start":
-            await safe_edit_menu(query, _make_welcome_text(), _make_welcome_markup())
+            user_id = update.effective_user.id if update.effective_user else None
+            await safe_edit_menu(query, _make_welcome_text(user_id), _make_welcome_markup())
             return
 
     # ON-DEMAND RECAP ASSETS DELIVERY (VOICEOVER / SRT / SCRIPT)

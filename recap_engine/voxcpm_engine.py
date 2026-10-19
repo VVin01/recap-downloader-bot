@@ -1,6 +1,7 @@
 """
 voxcpm_engine.py - Zero-shot Multilingual Neural TTS & Voice Cloning via VoxCPM.
 Connects seamlessly to OpenBMB's VoxCPM-Demo on Hugging Face Spaces for free, human-like voice synthesis.
+Supports real-time queue ETA & position tracking.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ from typing import Optional, Any, Callable
 
 logger = logging.getLogger(__name__)
 
-# Default Space and parameters
 DEFAULT_VOXCPM_SPACE = "openbmb/VoxCPM-Demo"
 DEFAULT_BURMESE_CONTROL = "A clear, natural, emotionally expressive Burmese movie recap narrator with warm tone and fluent pronunciation"
 
@@ -24,7 +24,7 @@ DEFAULT_BURMESE_CONTROL = "A clear, natural, emotionally expressive Burmese movi
 class VoxCPMEngine:
     """
     High-level client for VoxCPM speech synthesis and voice cloning.
-    Runs free inference via Hugging Face Cloud Spaces.
+    Runs free inference via Hugging Face Cloud Spaces with live Queue ETA monitoring.
     """
     _client_instance = None
     _last_init_time = 0
@@ -72,11 +72,12 @@ class VoxCPMEngine:
         reference_wav: Optional[Path | str] = None,
         prompt_text: str = "",
         cfg_value: float = 2.0,
+        progress_cb: Optional[Callable[[str], None]] = None,
         retries: int = 2,
     ) -> Path:
         """
         Synthesize Burmese speech for given text using VoxCPM.
-        Optionally clones voice from reference_wav.
+        Tracks real-time queue ETA and updates progress callback.
         """
         out_path = Path(output_wav).resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,8 +109,8 @@ class VoxCPMEngine:
                 self._log(f"🌐 [VoxCPM Cloud] Synthesizing ({attempt}/{retries+1}) — chars={len(clean_text)}")
                 client = self.get_client(self.space_name)
 
-                # predict(text_input, control_instruction, reference_wav_path_input, use_prompt_text, prompt_text_input, cfg_value_input, do_normalize, denoise, api_name="/generate")
-                result_tmp = client.predict(
+                # Submit job for asynchronous queue tracking
+                job = client.submit(
                     text_input=clean_text,
                     control_instruction=control_instruction or DEFAULT_BURMESE_CONTROL,
                     reference_wav_path_input=ref_file,
@@ -121,8 +122,26 @@ class VoxCPMEngine:
                     api_name="/generate",
                 )
 
+                # Monitor live queue status and ETA
+                while not job.done():
+                    try:
+                        st = job.status()
+                        eta_val = getattr(st, "eta", None)
+                        pos_val = getattr(st, "position", None)
+                        if eta_val is not None and eta_val > 0:
+                            eta_sec = int(round(eta_val))
+                            pos_str = f" (အဆင့်: {pos_val})" if pos_val is not None else ""
+                            msg = f"⏳ VoxCPM Queue စောင့်ဆိုင်းနေပါသည်{pos_str} — ခန့်မှန်းကြာချိန် ~{eta_sec}s"
+                            self._log(msg)
+                            if progress_cb:
+                                progress_cb(msg)
+                    except Exception:
+                        pass
+                    time.sleep(2)
+
+                result_tmp = job.result()
+
                 if result_tmp and os.path.isfile(result_tmp) and os.path.getsize(result_tmp) > 1000:
-                    # Convert to standard 24kHz / 44.1kHz WAV if needed, or copy directly
                     shutil.copy2(result_tmp, out_path)
                     try:
                         shutil.copy2(result_tmp, cached_file)
@@ -136,7 +155,6 @@ class VoxCPMEngine:
             except Exception as e:
                 last_err = e
                 self._log(f"⚠️ VoxCPM attempt {attempt} failed: {e}")
-                # Reset client cache in case of broken session
                 VoxCPMEngine._client_instance = None
                 if attempt <= retries:
                     time.sleep(2 * attempt)

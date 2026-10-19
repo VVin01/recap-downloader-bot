@@ -5,12 +5,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Install FFmpeg, Burmese Fonts, and required system tools
+# Install FFmpeg, Burmese Fonts, libgomp (for faster-whisper/ctranslate2), and required tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-noto-core \
     fonts-noto-cjk \
     fontconfig \
+    libgomp1 \
     git \
     curl \
     ca-certificates \
@@ -23,7 +24,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python packages
-RUN pip install --no-cache-dir -r requirements.txt gradio_client
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
