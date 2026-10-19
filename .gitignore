@@ -1,0 +1,24 @@
+# Environment and secrets
+.env
+*.env
+.venv/
+env/
+
+# Large downloads and workspaces
+downloads/
+recap_output/
+*.mp4
+*.mp3
+*.wav
+*.mkv
+*.webm
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS artifacts
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+python-telegram-bot>=21.0
+yt-dlp>=2024.8.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+aiofiles>=24.0.0
+curl_cffi>=0.7.0
+faster-whisper>=1.0.0
+av>=11.0.0,<19.0.0
+google-genai>=0.1.0
+edge-tts>=6.1.0

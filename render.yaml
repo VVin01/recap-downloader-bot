@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: recap-voice-downloader-bot
+    env: docker
+    plan: standard
+    autoDeploy: true
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
