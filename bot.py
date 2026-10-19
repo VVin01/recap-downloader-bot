@@ -785,12 +785,18 @@ def _make_welcome_text(user_id: Optional[int] = None) -> str:
 
 
 def _make_welcome_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📖 အသုံးပြုနည်း လမ်းညွှန် (Help)", callback_data="menu:help"),
-            InlineKeyboardButton("🎙️ Voice Clone အသံများ", callback_data="menu:voices"),
-        ]
+    web_app_url = os.getenv("MINI_APP_URL", "").strip() or os.getenv("RENDER_EXTERNAL_URL", "").strip()
+    rows = []
+    if web_app_url:
+        from telegram import WebAppInfo
+        rows.append([
+            InlineKeyboardButton("📱 Open Studio (Mini App) ✨", web_app=WebAppInfo(url=web_app_url))
+        ])
+    rows.append([
+        InlineKeyboardButton("📖 အသုံးပြုနည်း လမ်းညွှန် (Help)", callback_data="menu:help"),
+        InlineKeyboardButton("🎙️ Voice Clone အသံများ", callback_data="menu:voices"),
     ])
+    return InlineKeyboardMarkup(rows)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
