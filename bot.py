@@ -785,13 +785,16 @@ def _make_welcome_text(user_id: Optional[int] = None) -> str:
 
 
 def _make_welcome_markup() -> InlineKeyboardMarkup:
-    web_app_url = os.getenv("MINI_APP_URL", "").strip() or os.getenv("RENDER_EXTERNAL_URL", "").strip()
+    web_app_url = os.getenv("MINI_APP_URL", "").strip() or os.getenv("RENDER_EXTERNAL_URL", "").strip() or "https://voice-clone-studio-c1er.onrender.com"
     rows = []
     if web_app_url:
         from telegram import WebAppInfo
         rows.append([
-            InlineKeyboardButton("📱 Open Studio (Mini App) ✨", web_app=WebAppInfo(url=web_app_url))
+            InlineKeyboardButton("🚀 Open Studio Pro (Mini App) ✨", web_app=WebAppInfo(url=web_app_url))
         ])
+    rows.append([
+        InlineKeyboardButton("👑 Official Voice Clone Pro Bot သို့ သွားမည် 👉", url="https://t.me/voiceclonepro_bot")
+    ])
     rows.append([
         InlineKeyboardButton("📖 အသုံးပြုနည်း လမ်းညွှန် (Help)", callback_data="menu:help"),
         InlineKeyboardButton("🎙️ Voice Clone အသံများ", callback_data="menu:voices"),
